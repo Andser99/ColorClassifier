@@ -44,7 +44,15 @@ namespace ColorPointClassifier
             PrecomputedSquares = new int[_mapSize];
             PrecomputeSquares(mapSize);
 
-            AddDefaultPoints();
+            if (mapSize == 5000)
+            {
+                AddDefaultPoints();
+            }
+        }
+
+        public void SetSeed(int seed)
+        {
+            rnd = new Random(seed);
         }
 
         public void AddPoint(int x, int y, byte type)
@@ -95,9 +103,9 @@ namespace ColorPointClassifier
         {
             int progress = 0;
             List<(short x, short y)> listToAdd = new List<(short x, short y)>();
-            for (int i = -5000; i <= 5000; i += 1)
+            for (int i = -_mapCenterY; i <= _mapCenterY; i += 1)
             {
-                for (int j = -5000; j <= 5000; j += 1)
+                for (int j = -_mapCenterX; j <= _mapCenterX; j += 1)
                 {
                     if (Map[i + _mapCenterY, j + _mapCenterX] == 0x0)
                     {
@@ -134,7 +142,7 @@ namespace ColorPointClassifier
                 Map[point.y + _mapCenterY, point.x + _mapCenterX] = color;
                 FilledMap[point.y + _mapCenterY, point.x + _mapCenterX] = color;
                 progressBar.Value = progress / (listToAdd.Count / 100);
-                if (progress % 100000 == 0) Console.WriteLine($"Progress: {progress}");
+                if (progress % 10000 == 0) Console.WriteLine($"Progress: {((double)progress)/1000000:0.###}%");
             }
             progressBar.Value = 0;
         }
@@ -143,12 +151,23 @@ namespace ColorPointClassifier
         {
             Map = new byte[_mapSize, _mapSize];
             FilledMap = new byte[_mapSize, _mapSize];
-            AddDefaultPoints();
+            PointsList.Clear();
+            if (_mapCenterX == 5000) AddDefaultPoints();
         }
+        
 
+        /// <summary>
+        /// Finds a point with the closest type using the kNN algorithm where k is <paramref name="countClosest"/>
+        /// If there are more than 5000 points already, switches to a more effective algorithm.
+        /// </summary>
+        /// <param name="countClosest"></param>
+        /// <param name="sourcePoint"></param>
+        /// <param name="add"></param>
+        /// <returns></returns>
         public byte FindClosestType(int countClosest, (int x, int y) sourcePoint, bool add = false)
         {
-            if (PointsList.Count > 5000)
+            //
+            if (PointsList.Count > 5000 * countClosest)
             {
                 return SnailSearch(sourcePoint, countClosest);
             }
@@ -170,7 +189,7 @@ namespace ColorPointClassifier
                 }
                 if (closestPoint.x != int.MaxValue && closestPoint.y != int.MaxValue)
                 {
-                    closestPointsList.Add(Map[closestPoint.y+5000, closestPoint.x+5000]);
+                    closestPointsList.Add(Map[closestPoint.y+_mapCenterY, closestPoint.x+_mapCenterX]);
                 }
             }
             byte mostCommonType = (byte)(closestPointsList.GroupBy(_ => _).OrderByDescending(_ => _).First().Key);
@@ -184,96 +203,110 @@ namespace ColorPointClassifier
         {
             bool expanded = false;
             int size = 1;
-            //List<(int Distance, int Color)> closestPointsList = new List<(int Distance, int Color)>();
-            int closestDistance = int.MaxValue;
+            List<(int Distance, int Color)> closestPointsList = new List<(int Distance, int Color)>();
+            closestPointsList.Add((int.MaxValue, 0));
             int targetSize = int.MaxValue;
-            (int x, int y) closestPoint = (int.MaxValue, int.MaxValue);
             while (!expanded)
             {
                 int AbsSquare = PrecomputedSquares[Math.Abs(size)];
                 //Top line
-                if (coord.y + size <= 5000)
+                if (coord.y + size <= _mapCenterY)
                 {
                     for (int i = -size; i <= size; i++)
                     {
-                        if (coord.x + i >= -5000 && coord.x + i <= 5000)
+                        if (coord.x + i >= -_mapCenterX && coord.x + i <= _mapCenterX)
                         {
                             var color = Map[coord.y + size + _mapCenterY, coord.x + i + _mapCenterX];
                             if (color == 0x0) continue;
                             int xAbs = Math.Abs(i);
                             int distance = PrecomputedSquares[xAbs] + AbsSquare;
-                            if (distance < closestDistance)
+                            if (distance < closestPointsList.Last().Distance)
                             {
-                                //closestPointsList.Add((closestDistance, color));
-                                closestDistance = distance;
-                                closestPoint = (coord.x + i, coord.y + size);
+                                closestPointsList.Add((distance, color));
+                                closestPointsList.Sort((a,b) => a.Distance - b.Distance);
+                                if (closestPointsList.Count > countClosest)
+                                {
+                                    closestPointsList.RemoveAt(closestPointsList.Count-1);
+                                }
                             }
                         }
                     }
                 }
                 //Bottom line
-                if (coord.y - size >= -5000) //Check out of bounds for whole line at the bottom
+                if (coord.y - size >= -_mapCenterY) //Check out of bounds for whole line at the bottom
                 {
                     for (int i = -size; i <= size; i++)
                     {
-                        if (coord.x + i >= -5000 && coord.x + i <= 5000) // check side out of bounds for point on line
+                        if (coord.x + i >= -_mapCenterX && coord.x + i <= _mapCenterX) // check side out of bounds for point on line
                         {
                             var color = Map[coord.y - size + _mapCenterY, coord.x + i + _mapCenterX];
                             if (color == 0x0) continue;
                             int xAbs = Math.Abs(i);
                             int distance = PrecomputedSquares[xAbs] + AbsSquare;
-                            if (distance < closestDistance)
+                            if (distance < closestPointsList.Last().Distance)
                             {
-                                closestDistance = distance;
-                                closestPoint = (coord.x + i, coord.y - size);
+                                closestPointsList.Add((distance, color));
+                                closestPointsList.Sort((a, b) => a.Distance - b.Distance);
+                                if (closestPointsList.Count > countClosest)
+                                {
+                                    closestPointsList.RemoveAt(closestPointsList.Count - 1);
+                                }
                             }
                         }
                     }
                 }
                 //Right line
-                if (coord.x + size <= 5000)
+                if (coord.x + size <= _mapCenterX)
                 {
                     for (int i = -size + 1; i < size; i++)
                     {
-                        if (coord.y + i >= -5000 && coord.y + i <= 5000)
+                        if (coord.y + i >= -_mapCenterY && coord.y + i <= _mapCenterY)
                         {
                             var color = Map[coord.y + i + _mapCenterY, coord.x + size + _mapCenterX];
                             if (color == 0x0) continue;
                             int yAbs = Math.Abs(i);
                             int distance = AbsSquare + PrecomputedSquares[yAbs];
-                            if (distance < closestDistance)
+                            if (distance < closestPointsList.Last().Distance)
                             {
-                                closestDistance = distance;
-                                closestPoint = (coord.x + size, coord.y + i);
+                                closestPointsList.Add((distance, color));
+                                closestPointsList.Sort((a, b) => a.Distance - b.Distance);
+                                if (closestPointsList.Count > countClosest)
+                                {
+                                    closestPointsList.RemoveAt(closestPointsList.Count - 1);
+                                }
                             }
                         }
                     }
                 }
                 //Left line
-                if (coord.x - size >= -5000)
+                if (coord.x - size >= -_mapCenterX)
                 {
                     for (int i = -size + 1; i < size; i++)
                     {
-                        if (coord.y + i >= -5000 && coord.y + i <= 5000)
+                        if (coord.y + i >= -_mapCenterY && coord.y + i <= _mapCenterY)
                         {
                             var color = Map[coord.y + i + _mapCenterY, coord.x - size + _mapCenterX];
                             if (color == 0x0) continue;
                             int yAbs = Math.Abs(i);
                             int distance = AbsSquare + PrecomputedSquares[yAbs];
-                            if (distance < closestDistance)
+                            if (distance < closestPointsList.Last().Distance)
                             {
-                                closestDistance = distance;
-                                closestPoint = (coord.x - size, coord.y + i);
+                                closestPointsList.Add((distance, color));
+                                closestPointsList.Sort((a, b) => a.Distance - b.Distance);
+                                if (closestPointsList.Count > countClosest)
+                                {
+                                    closestPointsList.RemoveAt(closestPointsList.Count - 1);
+                                }
                             }
                         }
                     }
                 }
 
-                if (closestDistance != int.MaxValue || size >= targetSize || size > 10000)
+                if (closestPointsList.Count == countClosest && closestPointsList.First().Distance != int.MaxValue || size >= targetSize || size > 10000)
                 {
                     if (targetSize == int.MaxValue) targetSize = (size * 1415) / 1000;
 
-                    if (size > 5001 || size >= targetSize)
+                    if (size > _mapSize / 2 || size >= targetSize)
                     {
                         //sizeList[sizeIndex] = size;
                         //sizeIndex++;
@@ -287,9 +320,9 @@ namespace ColorPointClassifier
                         //    Console.WriteLine($"Avg size needed in last 100: {total / 100}");
                         //    sizeIndex = 0;
                         //}
-                        byte t = Map[closestPoint.y + _mapCenterY, closestPoint.x + _mapCenterX];
-                        //AddPoint(coord.x, coord.y, t);
-                        return t;
+                        byte mostCommonType = (byte)(closestPointsList.GroupBy(_ => _.Color).OrderByDescending(_ => _.Key).First().Key);
+                        //AddPoint(coord.x, coord.y, mostCommonType);
+                        return mostCommonType;
                     }
                 }
 

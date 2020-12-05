@@ -21,22 +21,28 @@ namespace ColorPointClassifier
             pointMap = new PointMap(5000, 3);
         }
 
+        private void DebugLine(string text)
+        {
+            DebugTextBox.Text += text + Environment.NewLine;
+        }
+
         private async void Generate_Click(object sender, EventArgs e)
         {
-            if (KNNListBox.SelectedIndex == -1 || KNNListBox.SelectedIndex == 0)
+            if (KNNListBox.SelectedIndex == -1)
             {
-                DebugTextBox.Text += "Select a k-value first \n";
+                DebugLine("Select a k-value first");
                 return;
             }
-            DebugTextBox.Text += "Generating 40000 points, please wait \n";
+            pointMap.SetSeed(Convert.ToInt32(SeedPicker.Value));
+            DebugLine($"Generating {GenerateLimitedPicker.Value} points, please wait for accuracy results.");
             int kValue = Convert.ToInt32(KNNListBox.SelectedItem);
             double accuracy = 0;
             await Task.Run(() =>
             {
-                accuracy = pointMap.AddRandom(kValue, 10);
+                accuracy = pointMap.AddRandom(kValue, Convert.ToInt32(GenerateLimitedPicker.Value));
             });
 
-            AccuracyTextBox.Text = $"Accuracy: {accuracy:0.##}";
+            DebugLine($"Accuracy: {accuracy:0.##}");
         }
 
         private void FillRestButton_Click(object sender, EventArgs e)
@@ -46,11 +52,11 @@ namespace ColorPointClassifier
             FillingProgressBar.Value = 0;
             if (KNNListBox.SelectedIndex == -1 && KNNListBox.SelectedIndex == 0)
             {
-                DebugTextBox.Text += "Select a k-value first\n";
+                DebugLine("Select a k-value first");
             }
             else
             {
-                DebugTextBox.Text += "Starting to fill the map\n";
+                DebugLine("Starting to fill the map");
                 pointMap.FillRest(Convert.ToInt32(KNNListBox.SelectedItem), FillingProgressBar);
             }
 
@@ -58,6 +64,7 @@ namespace ColorPointClassifier
 
         private void DrawButton_Click(object sender, EventArgs e)
         {
+            DebugLine("Drawing image, wait for it to show");
             Task.Run(() =>
             {
                 if (ImageBox.Image != null)
@@ -66,12 +73,15 @@ namespace ColorPointClassifier
                 }
                 int size = pointMap.GetSize() + 1;
 
-                Bitmap bMap = new Bitmap(2, 2);
-                bMap.SetPixel(0, 0, Color.White);
-                bMap.SetPixel(0, 1, Color.White);
-                bMap.SetPixel(1, 0, Color.White);
-                bMap.SetPixel(1, 1, Color.White);
-                bMap = new Bitmap(bMap, 10002, 10002);
+                Bitmap bMap = new Bitmap(16, 16);
+                for (int i = 0; i < bMap.Width; i++)
+                {
+                    for (int j = 0; j < bMap.Height; j++)
+                    {
+                        bMap.SetPixel(i, j, Color.White);
+                    }
+                }
+                bMap = new Bitmap(bMap, pointMap.GetSize() + 1, pointMap.GetSize() + 1);
                 for (int i = 0; i < size * size; i++)
                 {
                     byte value = pointMap.GetByteAt(i / size, i % size);
@@ -98,13 +108,13 @@ namespace ColorPointClassifier
                 }
 
                 //Clean up old image
-                if (File.Exists("img.bmp"))
+                if (File.Exists("img.png"))
                 {
-                    File.Delete("img.bmp");
+                    File.Delete("img.png");
                 }
-                bMap.Save("img.bmp", ImageFormat.Bmp);
+                bMap.Save("img.png", ImageFormat.Png);
 
-                ImageBox.Image = new Bitmap(Image.FromFile("img.bmp"), ImageBox.Width, ImageBox.Height);
+                ImageBox.Image = new Bitmap(Image.FromFile("img.png"), ImageBox.Width, ImageBox.Height);
             });
         }
 
