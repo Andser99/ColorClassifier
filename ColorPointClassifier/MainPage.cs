@@ -23,7 +23,8 @@ namespace ColorPointClassifier
 
         private void DebugLine(string text)
         {
-            DebugTextBox.Text += text + Environment.NewLine;
+            //DebugTextBox.Text += text + Environment.NewLine;
+            DebugTextBox.AppendText(text);
         }
 
         private async void Generate_Click(object sender, EventArgs e)
@@ -108,11 +109,25 @@ namespace ColorPointClassifier
                 }
 
                 //Clean up old image
-                if (File.Exists("img.png"))
+                try
                 {
-                    File.Delete("img.png");
+                    if (File.Exists("img.png"))
+                    {
+                        File.Delete("img.png");
+                    }
                 }
-                bMap.Save("img.png", ImageFormat.Png);
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
+                try
+                {
+                    bMap.Save("img.png", ImageFormat.Png);
+                }
+                catch
+                {
+
+                }
 
                 ImageBox.Image = new Bitmap(Image.FromFile("img.png"), ImageBox.Width, ImageBox.Height);
             });
@@ -120,6 +135,7 @@ namespace ColorPointClassifier
 
         private void ResetButton_Click(object sender, EventArgs e)
         {
+            ImageBox.Image = new Bitmap(1,1);
             pointMap.Reset();
         }
     }

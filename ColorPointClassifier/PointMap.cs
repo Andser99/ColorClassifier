@@ -21,12 +21,13 @@ namespace ColorPointClassifier
         private byte[,] Map;
         private byte[,] FilledMap;
         private List<(int x, int y)> PointsList;
+        private int scale;
 
         private int[] sizeList = new int[100];
         private int sizeIndex = 0;
 
         /// <summary>
-        /// Initializes a map with <paramref name="mapSize"/> and precomputes squares up to and including <paramref name="mapSize"/>
+        /// Initializes a map with <paramref name="mapSize"/> in each direction and [0,0] and precomputes squares up to and including <paramref name="mapSize"/>
         /// </summary>
         /// <param name="mapSize">Defines the maximum map size in each direction</param>
         public PointMap(int mapSize, int seed)
@@ -36,6 +37,7 @@ namespace ColorPointClassifier
             _mapCenterY = mapSize;
             _mapSize = mapSize * 2 + 2;
             _mapPointsTotal = _mapSize * _mapSize;
+            scale = 10000 / (_mapSize - 2);
             Map = new byte[_mapSize, _mapSize];
             FilledMap = new byte[_mapSize, _mapSize];
 
@@ -43,11 +45,7 @@ namespace ColorPointClassifier
 
             PrecomputedSquares = new int[_mapSize];
             PrecomputeSquares(mapSize);
-
-            if (mapSize == 5000)
-            {
-                AddDefaultPoints();
-            }
+            AddDefaultPoints();
         }
 
         public void SetSeed(int seed)
@@ -118,7 +116,7 @@ namespace ColorPointClassifier
                     }
                     progress++;
                 }
-                progressBar.Value = progress / (_mapPointsTotal / 100);
+                progressBar.Value = progress / (_mapPointsTotal / 100) % 100;
             }
             progress = 0;
             progressBar.Value = 0;
@@ -126,7 +124,7 @@ namespace ColorPointClassifier
             while (n > 1)
             {
                 progress++;
-                progressBar.Value = progress / (listToAdd.Count / 100);
+                progressBar.Value = progress / (listToAdd.Count / 100) % 100;
                 n--;
                 int k = rnd.Next(n + 1);
                 var value = listToAdd[k];
@@ -139,9 +137,13 @@ namespace ColorPointClassifier
             {
                 progress++;
                 var color = FindClosestType(kClosest, point, true);
+                if (color == 0x0)
+                {
+                    var x = "pizdec";
+                }
                 Map[point.y + _mapCenterY, point.x + _mapCenterX] = color;
                 FilledMap[point.y + _mapCenterY, point.x + _mapCenterX] = color;
-                progressBar.Value = progress / (listToAdd.Count / 100);
+                progressBar.Value = progress / (listToAdd.Count / 100) % 100;
                 if (progress % 10000 == 0) Console.WriteLine($"Progress: {((double)progress)/1000000:0.###}%");
             }
             progressBar.Value = 0;
@@ -152,7 +154,7 @@ namespace ColorPointClassifier
             Map = new byte[_mapSize, _mapSize];
             FilledMap = new byte[_mapSize, _mapSize];
             PointsList.Clear();
-            if (_mapCenterX == 5000) AddDefaultPoints();
+            AddDefaultPoints();
         }
         
 
@@ -167,7 +169,7 @@ namespace ColorPointClassifier
         public byte FindClosestType(int countClosest, (int x, int y) sourcePoint, bool add = false)
         {
             //
-            if (PointsList.Count > 5000 * countClosest)
+            if (PointsList.Count > 5000 * countClosest || true)
             {
                 return SnailSearch(sourcePoint, countClosest);
             }
@@ -320,9 +322,28 @@ namespace ColorPointClassifier
                         //    Console.WriteLine($"Avg size needed in last 100: {total / 100}");
                         //    sizeIndex = 0;
                         //}
-                        byte mostCommonType = (byte)(closestPointsList.GroupBy(_ => _.Color).OrderByDescending(_ => _.Key).First().Key);
+                        int[] colorArr = new int[5];
+                        foreach (var p in closestPointsList)
+                        {
+                            colorArr[p.Color]++;
+                        }
+                        colorArr[0] = 0;
+                        var maxColor = 0;
+                        var maxColorCount = 0;
+                        for (int i = 0; i < 5; i++)
+                        {
+                            if (colorArr[i] > maxColorCount)
+                            {
+                                maxColorCount = colorArr[i];
+                                maxColor = i;
+                            }
+                        }
+                        if (maxColor == 0)
+                        {
+                            Console.WriteLine("Fugged");
+                        }
                         //AddPoint(coord.x, coord.y, mostCommonType);
-                        return mostCommonType;
+                        return (byte) maxColor;
                     }
                 }
 
@@ -335,72 +356,88 @@ namespace ColorPointClassifier
 
         private int ClassifyRandomRed(int kClosest)
         {
-            int x = rnd.Next(-5000, 500);
-            int y = rnd.Next(-5000, 500);
+            int x = rnd.Next(-5000 / scale, 500 / scale);
+            int y = rnd.Next(-5000 / scale, 500 / scale);
             int correct = 0;
             if (rnd.Next(100) == 1)
             {
-                x = rnd.Next(-5000, 5001);
-                y = rnd.Next(-5000, 5001);
-                if (FindClosestType(kClosest, (x, y), true) == 1) correct = 1;
+                x = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                y = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 1) correct = 1;
             }
             else
             {
-                if (FindClosestType(kClosest, (x, y), true) == 1) correct = 1;
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 1) correct = 1;
             }
             return correct;
         }
 
         private int ClassifyRandomGreen(int kClosest)
         {
-            int x = rnd.Next(-499, 5001);
-            int y = rnd.Next(-5000, 500);
+            int x = rnd.Next(-500 / scale + 1, 5000 / scale + 1);
+            int y = rnd.Next(-5000 / scale, 500 / scale);
             int correct = 0;
             if (rnd.Next(100) == 1)
             {
-                x = rnd.Next(-5000, 5001);
-                y = rnd.Next(-5000, 5001);
-                if (FindClosestType(kClosest, (x, y), true) == 2) correct = 1;
+                x = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                y = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 2) correct = 1;
             }
             else
             {
-                if (FindClosestType(kClosest, (x, y), true) == 2) correct = 1;
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 2) correct = 1;
             }
             return correct;
         }
 
         private int ClassifyRandomBlue(int kClosest)
         {
-            int x = rnd.Next(-5000, 500);
-            int y = rnd.Next(-499, 5001);
+            int x = rnd.Next(-5000 / scale, 500 / scale);
+            int y = rnd.Next(-500 / scale + 1, 5000 / scale + 1);
             int correct = 0;
             if (rnd.Next(100) == 1)
             {
-                x = rnd.Next(-5000, 5001);
-                y = rnd.Next(-5000, 5001);
-                if (FindClosestType(kClosest, (x, y), true) == 3) correct = 1;
+                x = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                y = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 3) correct = 1;
             }
             else
             {
-                if (FindClosestType(kClosest, (x, y), true) == 3) correct = 1;
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 3) correct = 1;
             }
             return correct;
         }
 
         private int ClassifyRandomPurple(int kClosest)
         {
-            int x = rnd.Next(-499, 5001);
-            int y = rnd.Next(-499, 5001);
+            int x = rnd.Next(-500 / scale + 1, 5000 / scale + 1);
+            int y = rnd.Next(-500 / scale + 1, 5000 / scale + 1);
             int correct = 0;
             if (rnd.Next(100) == 1)
             {
-                x = rnd.Next(-5000, 5001);
-                y = rnd.Next(-5000, 5001);
-                if (FindClosestType(kClosest, (x, y), true) == 4) correct = 1;
+                x = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                y = rnd.Next(-5000 / scale, 5000 / scale + 1);
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 4) correct = 1;
             }
             else
             {
-                if (FindClosestType(kClosest, (x, y), true) == 4) correct = 1;
+                byte color = FindClosestType(kClosest, (x, y), true);
+                AddPoint(x, y, color);
+                if (color == 4) correct = 1;
             }
             return correct;
         }
@@ -408,33 +445,33 @@ namespace ColorPointClassifier
         private void AddDefaultPoints()
         {
             //Red
-            AddPoint(-4500, -4400, 1);
-            AddPoint(-4100, -3000, 1);
-            AddPoint(-1800, -2400, 1);
-            AddPoint(-2500, -3400, 1);
-            AddPoint(-2000, -1400, 1);
+            AddPoint(-4500 / scale, -4400 / scale, 1);
+            AddPoint(-4100 / scale, -3000 / scale, 1);
+            AddPoint(-1800 / scale, -2400 / scale, 1);
+            AddPoint(-2500 / scale, -3400 / scale, 1);
+            AddPoint(-2000 / scale, -1400 / scale, 1);
 
 
             //Green
-            AddPoint(4500, -4400, 2);
-            AddPoint(4100, -3000, 2);
-            AddPoint(1800, -2400, 2);
-            AddPoint(2500, -3400, 2);
-            AddPoint(2000, -1400, 2);
+            AddPoint(4500 / scale, -4400 / scale, 2);
+            AddPoint(4100 / scale, -3000 / scale, 2);
+            AddPoint(1800 / scale, -2400 / scale, 2);
+            AddPoint(2500 / scale, -3400 / scale, 2);
+            AddPoint(2000 / scale, -1400 / scale, 2);
 
             //Blue
-            AddPoint(-4500, 4400, 3);
-            AddPoint(-4100, 3000, 3);
-            AddPoint(-1800, 2400, 3);
-            AddPoint(-2500, 3400, 3);
-            AddPoint(-2000, 1400, 3);
+            AddPoint(-4500 / scale, 4400 / scale, 3);
+            AddPoint(-4100 / scale, 3000 / scale, 3);
+            AddPoint(-1800 / scale, 2400 / scale, 3);
+            AddPoint(-2500 / scale, 3400 / scale, 3);
+            AddPoint(-2000 / scale, 1400 / scale, 3);
 
             //Purple
-            AddPoint(4500, 4400, 4);
-            AddPoint(4100, 3000, 4);
-            AddPoint(1800, 2400, 4);
-            AddPoint(2500, 3400, 4);
-            AddPoint(2000, 1400, 4);
+            AddPoint(4500 / scale, 4400 / scale, 4);
+            AddPoint(4100 / scale, 3000 / scale, 4);
+            AddPoint(1800 / scale, 2400 / scale, 4);
+            AddPoint(2500 / scale, 3400 / scale, 4);
+            AddPoint(2000 / scale, 1400 / scale, 4);
 
             if (DEBUG)
             {
